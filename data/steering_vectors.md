@@ -12,13 +12,13 @@ You can download the full dataset from the link below:
 After downloading, simply unzip the archive into the following path in your local copy of the repository:
 
 ```
-Arcade/data/
+arcade/data/
 ```
 
 Your folder structure should look like this:
 
 ```
-Arcade/
+arcade/
   data/
     steering_vectors/
       ...files...
