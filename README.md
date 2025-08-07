@@ -48,6 +48,8 @@ Arcade/
     ├── finetune_token_cls.py       # script for finetuning the pretrained base model with token classification head
     ├── fetch_steering_vectors.py   # script for making steering vectors
 ├── data/                  # Data for finetuning and steering vectors
+    ├── GENCODE            # Download data for finetuning
+    ├── steering_vectors   # Steering vectors for designing sequence
 ├── checkpoints/           # fine-tuned models
     ├── arcade/            # Arcade checkpoint
     ├── codonbert/         # CodonBERT checkpoint
