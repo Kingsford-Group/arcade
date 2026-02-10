@@ -120,14 +120,10 @@ CUDA_VISIBLE_DEVICES=0 python scripts/finetune_token_cls.py
   --data_path path/to/your/training/data \
   --use_lora
 ```
-\\paragraph{Arguments.}
-\begin{itemize}
-    \item \texttt{--model\_path}: Path to the pretrained base model (e.g., CodonBERT checkpoints).
-    \item \texttt{--data\_path}: Path to the training dataset. We also provide processed GENCODE data under the \texttt{data/} directory for reference.
-    \item \texttt{--use\_lora}: Enables LoRA for parameter-efficient fine-tuning.
-\end{itemize}
-
-The resulting model with decoding proxy is freezed for all the following 
+#### Arguments
+- `--model_path`: Path to the pretrained base model (e.g., CodonBERT checkpoints).
+- `--data_path`: Path to the training dataset. We also provide processed GENCODE data under the `data/` directory for reference.
+- `--use_lora`: Enables LoRA for parameter-efficient fine-tuning.
 
 
 ---
