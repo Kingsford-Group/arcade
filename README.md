@@ -96,22 +96,9 @@ CUDA_VISIBLE_DEVICES=0 python -u recons_token_cls.py \
   --save_file_name 'cai+gc' 
 ```
 
-
-
-If you want to use your own data and base model to get started, you can train the token classification head and generate steering vectors using the following commands:
-
-### Fine-Tune Token Classification Model
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python scripts/finetune_token_cls.py
-  --model_path path/to/downloaded/base/model (e.g., CodonBERT checkpoints) \
-  --data_path path/to/your/training/data \
-  --use_lora
-```
+For any new objective, This script computes **steering vectors** from contrastive sets of mutated sequences (e.g., high vs. low expression) without retraining the model.
 
 ### Fetch Steering Vectors
-
-This script computes **steering vectors** between two groups of mutated sequences (e.g., high vs. low expression) using a frozen CodonBERT model.
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/fetch_steering_vectors.py \
@@ -122,6 +109,26 @@ CUDA_VISIBLE_DEVICES=0 python scripts/fetch_steering_vectors.py \
   --save_name 'gc' \
   --save_dir data/steering_vectors
 ```
+
+If you want to use your own data and base model to get started, you can train the decoding proxy and generate steering vectors using the following commands:
+
+### Train Decoding Proxy
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python scripts/finetune_token_cls.py
+  --model_path path/to/downloaded/base/model \
+  --data_path path/to/your/training/data \
+  --use_lora
+```
+\\paragraph{Arguments.}
+\begin{itemize}
+    \item \texttt{--model\_path}: Path to the pretrained base model (e.g., CodonBERT checkpoints).
+    \item \texttt{--data\_path}: Path to the training dataset. We also provide processed GENCODE data under the \texttt{data/} directory for reference.
+    \item \texttt{--use\_lora}: Enables LoRA for parameter-efficient fine-tuning.
+\end{itemize}
+
+The resulting model with decoding proxy is freezed for all the following 
+
 
 ---
 
