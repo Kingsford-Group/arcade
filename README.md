@@ -110,7 +110,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/fetch_steering_vectors.py \
   --save_dir data/steering_vectors
 ```
 
-If you want to use your own data and base model to get started, you can train the decoding proxy and generate steering vectors using the following commands:
+If you want to use your own data and base model to get started, you can train the decoding proxy for encoder-only foundation model using the following commands:
 
 ### Train Decoding Proxy
 
