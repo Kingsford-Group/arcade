@@ -178,6 +178,190 @@ def cpb_calculation(seq, cps_table):
     return CPB
 
 
+def _load_codon_usage_table(table_path):
+    """
+    Load a codon usage frequency table from a JSON file.
+
+    Parameters
+    ----------
+    table_path : str
+        Path to a JSON file mapping codons to {"aa": ..., "freq_per_1000": ...}.
+
+    Returns
+    -------
+    dict
+        The parsed codon usage table.
+    """
+    with open(table_path, 'r') as f:
+        return json.load(f)
+
+
+def _get_expected_distribution(codon_table, amino_acid):
+    """
+    Get the expected codon frequency distribution for a given amino acid
+    from the organism's codon usage table.
+
+    Parameters
+    ----------
+    codon_table : dict
+        Codon usage table mapping codons to {"aa": ..., "freq_per_1000": ...}.
+    amino_acid : str
+        Three-letter amino acid code (e.g., "Phe", "Leu").
+
+    Returns
+    -------
+    dict
+        Mapping from codon to its expected relative frequency (normalized to sum=1).
+    """
+    codons_for_aa = {
+        codon: entry["freq_per_1000"]
+        for codon, entry in codon_table.items()
+        if entry["aa"] == amino_acid
+    }
+    total = sum(codons_for_aa.values())
+    if total == 0:
+        return {}
+    return {codon: freq / total for codon, freq in codons_for_aa.items()}
+
+
+def cufd_kl_divergence(seq, codon_table_path):
+    """
+    Calculate the Codon Usage Frequency Distribution (CUFD) score using
+    KL divergence between the observed codon distribution in the sequence
+    and the expected distribution from a target organism's codon usage table.
+
+    A lower score indicates better match to the target organism's codon usage.
+
+    Parameters
+    ----------
+    seq : str
+        cDNA/mRNA sequence (must be divisible by 3).
+    codon_table_path : str
+        Path to the organism codon usage JSON file.
+
+    Returns
+    -------
+    float
+        The average KL divergence across all amino acids present in the sequence.
+        Returns 0.0 for empty sequences or sequences with no valid codons.
+    """
+    seq = seq.upper().replace('T', 'U')
+    codons = [seq[i:i+3] for i in range(0, len(seq), 3) if len(seq[i:i+3]) == 3]
+
+    if not codons:
+        return 0.0
+
+    codon_table = _load_codon_usage_table(codon_table_path)
+
+    # Group codons by amino acid
+    aa_codon_counts = {}
+    for codon in codons:
+        if codon not in codon_table:
+            continue
+        aa = codon_table[codon]["aa"]
+        if aa == "Stop":
+            continue
+        if aa not in aa_codon_counts:
+            aa_codon_counts[aa] = {}
+        aa_codon_counts[aa][codon] = aa_codon_counts[aa].get(codon, 0) + 1
+
+    if not aa_codon_counts:
+        return 0.0
+
+    # Compute KL divergence per amino acid
+    epsilon = 1e-10
+    kl_values = []
+    for aa, observed_counts in aa_codon_counts.items():
+        expected_dist = _get_expected_distribution(codon_table, aa)
+        if not expected_dist:
+            continue
+
+        total_observed = sum(observed_counts.values())
+        observed_dist = {
+            codon: observed_counts.get(codon, 0) / total_observed
+            for codon in expected_dist
+        }
+
+        kl = 0.0
+        for codon in expected_dist:
+            p = observed_dist.get(codon, 0) + epsilon
+            q = expected_dist[codon] + epsilon
+            kl += p * np.log(p / q)
+
+        kl_values.append(kl)
+
+    return float(np.mean(kl_values)) if kl_values else 0.0
+
+
+def cufd_cosine_similarity(seq, codon_table_path):
+    """
+    Calculate the Codon Usage Frequency Distribution (CUFD) score using
+    cosine similarity between the observed codon distribution in the sequence
+    and the expected distribution from a target organism's codon usage table.
+
+    A higher score (closer to 1.0) indicates better match to the target
+    organism's codon usage.
+
+    Parameters
+    ----------
+    seq : str
+        cDNA/mRNA sequence (must be divisible by 3).
+    codon_table_path : str
+        Path to the organism codon usage JSON file.
+
+    Returns
+    -------
+    float
+        The average cosine similarity across all amino acids present in the
+        sequence. Range: [0.0, 1.0]. Returns 0.0 for empty sequences.
+    """
+    seq = seq.upper().replace('T', 'U')
+    codons = [seq[i:i+3] for i in range(0, len(seq), 3) if len(seq[i:i+3]) == 3]
+
+    if not codons:
+        return 0.0
+
+    codon_table = _load_codon_usage_table(codon_table_path)
+
+    # Group codons by amino acid
+    aa_codon_counts = {}
+    for codon in codons:
+        if codon not in codon_table:
+            continue
+        aa = codon_table[codon]["aa"]
+        if aa == "Stop":
+            continue
+        if aa not in aa_codon_counts:
+            aa_codon_counts[aa] = {}
+        aa_codon_counts[aa][codon] = aa_codon_counts[aa].get(codon, 0) + 1
+
+    if not aa_codon_counts:
+        return 0.0
+
+    cos_values = []
+    for aa, observed_counts in aa_codon_counts.items():
+        expected_dist = _get_expected_distribution(codon_table, aa)
+        if not expected_dist:
+            continue
+
+        total_observed = sum(observed_counts.values())
+
+        # Build vectors in the same codon order
+        obs_vec = np.array([observed_counts.get(c, 0) / total_observed for c in expected_dist])
+        exp_vec = np.array([expected_dist[c] for c in expected_dist])
+
+        dot = np.dot(obs_vec, exp_vec)
+        norm_obs = np.linalg.norm(obs_vec)
+        norm_exp = np.linalg.norm(exp_vec)
+
+        if norm_obs == 0 or norm_exp == 0:
+            cos_values.append(0.0)
+        else:
+            cos_values.append(float(dot / (norm_obs * norm_exp)))
+
+    return float(np.mean(cos_values)) if cos_values else 0.0
+
+
 # input: directory
 def sequences_from_dir(path, pattern=".fasta", output_file="mfe_table.csv"):
     seqs = []

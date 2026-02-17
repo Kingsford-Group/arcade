@@ -2,7 +2,7 @@
 This script shows examples of how to mutating contrastive sets from a sed set of 
 sequences.
 
-It can generate high and low variants of coding sequences based on four different
+It can generate high and low variants of coding sequences based on five different
 optimization criteria:
 
 * ``frequent`` – substitute each codon with the most or least frequently used
@@ -13,6 +13,9 @@ optimization criteria:
 * ``cpg`` – mutate sequences to increase or decrease CpG dinucleotide density
   using simple heuristics on successive codons.
 * ``upa`` – similar to ``cpg`` but targeting UpA dinucleotide density.
+* ``cufd`` – select codons to match (high) or diverge from (low) the target
+  organism's codon usage frequency distribution, enabling steering towards
+  optimal translational efficiency.
 
 Users should configure the ``type`` variable and file paths at the top of
 the script. Input sequences are expected in FASTA format and should consist
@@ -51,7 +54,7 @@ from Bio.Seq import Seq
 # Configuration: edit these variables to match your local environment
 # -----------------------------------------------------------------------------
 
-type: str = "gc"  # choose from: 'frequent', 'gc', 'cpg', 'upa'
+type: str = "gc"  # choose from: 'frequent', 'gc', 'cpg', 'upa', 'cufd'
 
 # Path to the input coding sequences (FASTA format). Each sequence length
 # should be divisible by 3.
@@ -289,6 +292,95 @@ def get_new_sequence_dinucleotide(
 
 
 # -----------------------------------------------------------------------------
+# CUFD-based optimisation functions
+# -----------------------------------------------------------------------------
+
+def cufd_codon_selection(
+    aa: str,
+    codon_usage_table: dict,
+    mode: str = "high",
+) -> str:
+    """
+    Select a codon for a given amino acid based on the organism's codon usage
+    frequency distribution (CUFD).
+
+    Parameters
+    ----------
+    aa : str
+        Three-letter amino acid code (e.g., "Phe").
+    codon_usage_table : dict
+        Mapping from codon to {"aa": ..., "freq_per_1000": ...}.
+    mode : str, optional
+        "high" to sample proportional to organism frequencies (good match),
+        "low" to always pick the rarest codon (poor match).
+
+    Returns
+    -------
+    str
+        The selected codon.
+    """
+    # Collect codons for this amino acid
+    codons_for_aa = [
+        (codon, entry["freq_per_1000"])
+        for codon, entry in codon_usage_table.items()
+        if entry["aa"] == aa
+    ]
+    if not codons_for_aa:
+        raise ValueError(f"No codons found for amino acid {aa}")
+
+    if mode == "high":
+        # Weighted random selection proportional to organism frequency
+        codons, weights = zip(*codons_for_aa)
+        total = sum(weights)
+        probs = [w / total for w in weights]
+        return random.choices(codons, weights=probs, k=1)[0]
+    elif mode == "low":
+        # Always pick the rarest codon
+        codons_for_aa.sort(key=lambda x: x[1])
+        return codons_for_aa[0][0]
+    else:
+        raise ValueError(f"mode must be 'high' or 'low', got '{mode}'")
+
+
+def get_new_sequence_cufd(
+    seq: str,
+    codon_usage_table: dict,
+    codon_to_amino_acid: dict,
+    mode: str = "high",
+) -> str:
+    """
+    Build a new sequence with codons selected to match (high) or diverge from
+    (low) the target organism's codon usage frequency distribution.
+
+    Parameters
+    ----------
+    seq : str
+        Original nucleotide sequence (length divisible by 3).
+    codon_usage_table : dict
+        Organism codon usage table with freq_per_1000 values.
+    codon_to_amino_acid : dict
+        Mapping from codon to three-letter amino acid code.
+    mode : str, optional
+        "high" for organism-matched, "low" for organism-divergent.
+
+    Returns
+    -------
+    str
+        The mutated sequence.
+    """
+    new_seq = ""
+    for i in range(0, len(seq), 3):
+        codon = seq[i:i + 3].upper().replace("T", "U")
+        if codon not in codon_to_amino_acid:
+            new_seq += codon
+            continue
+        aa = codon_to_amino_acid[codon]
+        new_codon = cufd_codon_selection(aa, codon_usage_table, mode=mode)
+        new_seq += new_codon
+    return new_seq
+
+
+# -----------------------------------------------------------------------------
 # Main execution
 # -----------------------------------------------------------------------------
 
@@ -402,9 +494,33 @@ def main() -> None:
             print(
                 f"Mean {type} score of low mutated sequences: {sum(low_scores) / len(low_scores):.4f}"
             )
+    elif type == "cufd":
+        # Load organism codon usage table (uses the same format as codon_usage_human.json)
+        import os
+        cufd_table_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "..", "calculator", "data", "codon_usage_human.json"
+        )
+        with open(cufd_table_path) as f:
+            cufd_table = json.load(f)
+        # Build codon→aa mapping from the CUFD table
+        cufd_codon_to_aa = {codon: entry["aa"] for codon, entry in cufd_table.items()}
+        for record in records:
+            seq_str = str(record.seq)
+            high_seq = get_new_sequence_cufd(seq_str, cufd_table, cufd_codon_to_aa, mode="high")
+            low_seq = get_new_sequence_cufd(seq_str, cufd_table, cufd_codon_to_aa, mode="low")
+            high_rec = record.copy()
+            high_rec.seq = Seq(high_seq)
+            high_rec.description = (high_rec.description or "") + " high_cufd"
+            high_records.append(high_rec)
+            low_rec = record.copy()
+            low_rec.seq = Seq(low_seq)
+            low_rec.description = (low_rec.description or "") + " low_cufd"
+            low_records.append(low_rec)
+
     else:
         raise ValueError(
-            "Unknown type: {}. Expected one of 'frequent', 'gc', 'cpg', 'upa'.".format(type)
+            "Unknown type: {}. Expected one of 'frequent', 'gc', 'cpg', 'upa', 'cufd'.".format(type)
         )
 
     # Write out the mutated sequences
