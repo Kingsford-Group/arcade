@@ -50,6 +50,7 @@ Arcade/
 ├── data/                  # Data for finetuning and steering vectors
     ├── GENCODE            # Download data for finetuning
     ├── steering_vectors   # Steering vectors for designing sequence
+    ├── mRFP_Expression.csv # mRFP Expression data from [Revealing determinants of translation efficiency via whole-gene codon randomization and machine learning](https://doi.org/10.1093/nar/gkad035)
 ├── checkpoints/           # fine-tuned models
     ├── arcade/            # Arcade checkpoint
     ├── codonbert/         # CodonBERT checkpoint
